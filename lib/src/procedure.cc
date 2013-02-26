@@ -104,7 +104,6 @@ oturtlestream &po::operator<<(oturtlestream &os, const procedure &p)
 	os << "[" << endl
 		 << " po:name \"" << p.name << "\"^^xsd:string;" << endl
 		 << " rdf:type po:Procedure;" << endl;
-
 	for(bblock_cptr bb: p.basic_blocks)
 		os << " po:include " << *bb << endl;
 		
