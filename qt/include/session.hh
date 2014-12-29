@@ -68,7 +68,7 @@ protected:
 class Procedure : public QObject
 {
 	Q_OBJECT
-	Q_PROPERTY(QString name READ name NOTIFY nameChanged)
+	Q_PROPERTY(QString name READ name WRITE setName NOTIFY nameChanged)
 
 public:
 	Procedure(QObject* parent = 0);
@@ -78,6 +78,8 @@ public:
 	boost::optional<po::proc_loc> procedure(void) const { return _procedure; }
 
 	QString name(void) const { return _procedure ? QString::fromStdString((*_procedure)->name) : ""; }
+
+	void setName(QString const& n);
 
 signals:
 	void nameChanged(void);

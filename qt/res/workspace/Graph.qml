@@ -346,4 +346,10 @@ Item {
 			}
 		}
 	}
+
+	ProcedureMenu {
+		procedure: (session != null ? session.activeProcedure : null)
+		anchors.right: root.right
+		y: 0
+	}
 }

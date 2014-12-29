@@ -19,6 +19,7 @@
 		<file>workspace/func.png</file>
 		<file>workspace/data.png</file>
 		<file>workspace/SideMenu.qml</file>
+		<file>workspace/ProcedureMenu.qml</file>
 
 		<!-- Graph -->
 		<file>workspace/Graph.qml</file>

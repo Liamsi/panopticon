@@ -505,3 +505,12 @@ void Session::setActiveProcedure(QObject* s)
 		emit activeProceduresChanged();
 	}
 }
+
+void Procedure::setName(QString const& n)
+{
+	if(_procedure && n != name())
+	{
+		_procedure->write().name = n.toStdString();
+		emit nameChanged();
+	}
+}
