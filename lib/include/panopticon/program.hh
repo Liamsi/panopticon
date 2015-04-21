@@ -176,6 +176,7 @@ namespace po
 					if(!maybe_proc)
 					{
 						worklist.insert(a);
+						call(*ret,*new_proc,std::to_string(a));
 					}
 					else
 					{
@@ -183,13 +184,24 @@ namespace po
 					}
 				}
 
-				// XXX: resolve calls to address in call graph
+				// resolve calls to address in call graph
 				using ed_desc = typename decltype(program::_calls)::edge_descriptor;
 				std::list<ed_desc> to_resolv;
 				auto eds = po::edges((*ret)->calls());
 
-				std::copy_if(eds.first,eds.second,std::back_inserter(to_resolv),
-					[&](ed_desc e) { return boost::get<symbol>(&get_vertex(po::target(e,(*ret)->calls()),(*ret)->calls())); });
+				std::copy_if(eds.first,eds.second,std::back_inserter(to_resolv),[&](ed_desc e)
+				{
+					try
+					{
+						symbol const* s = boost::get<symbol>(&get_vertex(po::target(e,(*ret)->calls()),(*ret)->calls()));
+						stoull(*s);
+						return true;
+					}
+					catch(std::invalid_argument const&)
+					{
+						return false;
+					}
+				});
 
 				for(auto e: to_resolv)
 				{
