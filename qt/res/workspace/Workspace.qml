@@ -49,6 +49,13 @@ Item {
 			color: "#eeeeee"
 		}
 
+		Calls {
+			anchors.fill: parent
+			id: grph
+			session: root.session
+		}
+
+		/*
 		Graph {
 			anchors.fill: parent
 			id: grph
@@ -64,7 +71,7 @@ Item {
 			arrowBodyColor: "#111111"
 			arrowHeadColor: "#aa1c1c"
 			selectionColor: "#bed83f"
-		}
+		}*/
 	}
 
 	SideMenu {

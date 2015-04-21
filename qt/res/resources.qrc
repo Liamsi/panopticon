@@ -17,5 +17,9 @@
 
 		<!-- Linear -->
 		<file>workspace/Linear.qml</file>
+
+		<!-- Calls -->
+		<file>workspace/Calls.qml</file>
+
 	</qresource>
 </RCC>
