@@ -21,6 +21,9 @@
 #include <panopticon/avr/avr.hh>
 
 #include "panopticon.hh"
+#include "sugiyama.hh"
+#include "radial.hh"
+#include "linear.hh"
 
 using namespace std;
 
@@ -43,6 +46,7 @@ int main(int argc, char *argv[])
 	qmlRegisterUncreatableType<Session>("Panopticon",1,0,"Session","Use Panopticon.newSession or Panopticon.openSession.");
 	qmlRegisterSingletonType<Panopticon>("Panopticon",1,0,"Panopticon",Panopticon::provider);
 	qmlRegisterType<Sugiyama>("Panopticon",1,0,"Sugiyama");
+	qmlRegisterType<Radial>("Panopticon",1,0,"Radial");
 
 	app.setOrganizationName("Panopticon");
 	app.setOrganizationDomain("panopticon.re");

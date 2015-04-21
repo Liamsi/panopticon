@@ -2,13 +2,13 @@ cmake_minimum_required(VERSION 2.8.11)
 project(PanopticonQt CXX)
 
 set(qtpanopticon_SOURCES src/session.cc src/main.cc
-	src/panopticon.cc src/sugiyama.cc)
+	src/panopticon.cc src/sugiyama.cc src/radial.cc src/linear.cc)
 set(qtpanopticon_HEADERS
 	include/dot/dot.hh include/dot/rank.hh include/dot/order.hh
 	include/dot/net_flow.hh)
 set(qtpanopticon_HEADERS_QT
 	include/panopticon.hh include/session.hh
-	include/sugiyama.hh)
+	include/sugiyama.hh include/radial.hh include/linear.hh)
 
 set(qtpanopticon_RESOURCES res/resources.qrc)
 

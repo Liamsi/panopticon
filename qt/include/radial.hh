@@ -1,6 +1,6 @@
 /*
  * This file is part of Panopticon (http://panopticon.re).
- * Copyright (C) 2014 Panopticon authors
+ * Copyright (C) 2015 Panopticon authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,39 +17,16 @@
  */
 
 #include <QtQuick>
-#include <QtCore>
-#include <QApplication>
-#include <QQmlApplicationEngine>
-
-#include "session.hh"
 
 #pragma once
 
-class Panopticon : public QObject
+class Radial : public QQuickPaintedItem
 {
 	Q_OBJECT
-	Q_PROPERTY(Session* session READ session NOTIFY sessionChanged)
 
 public:
-	static QObject* provider(QQmlEngine*, QJSEngine*);
-	static Panopticon& instance(void);
+	Radial(QQuickItem *parent = nullptr);
+	virtual ~Radial(void);
 
-	Panopticon(QObject* p = 0);
-	virtual ~Panopticon(void);
-
-	QString buildDate(void) const;
-	Session* session(void) const;
-
-	Q_INVOKABLE Session* openSession(const QString&);
-	Q_INVOKABLE Session* createAvrSession(const QString&);
-	Q_INVOKABLE Session* createRawSession(const QString&);
-	Session* createSession(Session *s);
-
-signals:
-	void sessionChanged(void);
-
-private:
-	Session* _session;
-
-	static Panopticon* _instance;
+	virtual void paint(QPainter*) override;
 };
