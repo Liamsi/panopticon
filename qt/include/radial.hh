@@ -23,10 +23,20 @@
 class Radial : public QQuickPaintedItem
 {
 	Q_OBJECT
+	Q_PROPERTY(QVariantList calls READ calls WRITE setCalls NOTIFY callsChanged)
 
 public:
 	Radial(QQuickItem *parent = nullptr);
 	virtual ~Radial(void);
 
 	virtual void paint(QPainter*) override;
+
+	QVariantList const& calls(void) const { return _calls; }
+	void setCalls(QVariantList const& c) { _calls = c; emit callsChanged(); update(); }
+
+signals:
+	void callsChanged(void);
+
+private:
+	QVariantList _calls;
 };

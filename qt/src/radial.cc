@@ -16,7 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QSet>
+#include <QSetIterator>
+#include <QList>
+#include <QListIterator>
+
 #include "radial.hh"
+#include "session.hh"
 
 #include <panopticon/ensure.hh>
 
@@ -26,14 +32,57 @@ Radial::~Radial(void) {}
 
 void Radial::paint(QPainter* p)
 {
+	QSet<Procedure*> procs;
+	QListIterator<QVariant> iter(_calls);
+
+	while(iter.hasNext())
+	{
+		QVariantList vl = iter.next().value<QVariantList>();
+
+		if(vl.size() < 2)
+		{
+			qWarning() << "invalid call:" << iter.peekPrevious();
+		}
+		else
+		{
+			Procedure* p1 = qobject_cast<Procedure*>(vl.takeFirst().value<QObject*>());
+			Procedure* p2 = qobject_cast<Procedure*>(vl.takeFirst().value<QObject*>());
+
+			if(!p1 || !p2)
+			{
+				qWarning() << "invalid call:" << iter.peekPrevious();
+			}
+			else
+			{
+				procs.insert(p1);
+				procs.insert(p2);
+			}
+		}
+	}
+
 	ensure(p);
 	p->save();
 	p->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing,true);
 
 	QPen pen(QBrush(QColor("blue")),3);
 	pen.setCosmetic(true);
-
 	p->setPen(pen);
-	p->drawArc(boundingRect(),0,5760);
+
+	size_t i = 0;
+	const size_t len = 5760 / procs.size();
+	QSetIterator<Procedure*> jter(procs);
+	QRectF bb = boundingRect().adjusted(0,0,-pen.width(),-pen.width());
+
+	bb.setWidth(std::min(bb.height(),bb.width()));
+	bb.setHeight(std::min(bb.height(),bb.width()));
+	bb.moveCenter(boundingRect().center());
+
+	while(jter.hasNext())
+	{
+		jter.next();
+		p->drawArc(bb,i * len,len - 50);
+		++i;
+	}
+
 	p->restore();
 }

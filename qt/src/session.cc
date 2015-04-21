@@ -75,7 +75,7 @@ Session::Session(po::session sess, QObject *p)
 				ensure(p != _procedures.end());
 				ensure(q != _procedures.end());
 
-				_calls.append(QVariant::fromValue(QPair<QVariant,QVariant>(*p,*q)));
+				_calls.append(QVariant::fromValue(QVariantList({*p,*q})));
 			}
 		}
 	}
