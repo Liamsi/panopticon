@@ -20,6 +20,8 @@
 #include <QSetIterator>
 #include <QList>
 #include <QListIterator>
+#include <QMap>
+#include <QMapIterator>
 
 #include "radial.hh"
 #include "session.hh"
@@ -33,6 +35,7 @@ Radial::~Radial(void) {}
 void Radial::paint(QPainter* p)
 {
 	QSet<Procedure*> procs;
+	QMap<Procedure*,Procedure*> calls;
 	QListIterator<QVariant> iter(_calls);
 
 	while(iter.hasNext())
@@ -56,9 +59,11 @@ void Radial::paint(QPainter* p)
 			{
 				procs.insert(p1);
 				procs.insert(p2);
+				calls.insertMulti(p1,p2);
 			}
 		}
 	}
+	iter.toFront();
 
 	ensure(p);
 	p->save();
@@ -69,18 +74,56 @@ void Radial::paint(QPainter* p)
 	p->setPen(pen);
 
 	size_t i = 0;
-	const size_t len = 5760 / procs.size();
+	const size_t len = 360 / procs.size();
 	QSetIterator<Procedure*> jter(procs);
-	QRectF bb = boundingRect().adjusted(0,0,-pen.width(),-pen.width());
+	QRectF bb1 = boundingRect().adjusted(0,0,-2 * pen.width(),-2 * pen.width());
 
-	bb.setWidth(std::min(bb.height(),bb.width()));
-	bb.setHeight(std::min(bb.height(),bb.width()));
-	bb.moveCenter(boundingRect().center());
+	bb1.setWidth(std::min(bb1.height(),bb1.width()));
+	bb1.setHeight(std::min(bb1.height(),bb1.width()));
+	bb1.moveCenter(boundingRect().center());
 
+	QRectF bb2 = bb1.adjusted(0,0,-100,-100);
+	bb2.moveCenter(boundingRect().center());
+
+	// draw sectors
 	while(jter.hasNext())
 	{
+		QPainterPath pp;
+		QLineF a = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
+		QLineF b = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
+
+		pp.arcMoveTo(bb1,i * len);
+		pp.arcTo(bb1,i * len,len - 2);
+		pp.lineTo(a.p2());
+		pp.arcMoveTo(bb2,i * len);
+		pp.arcTo(bb2,i * len,len - 2);
+		pp.arcMoveTo(bb2,i * len);
+		pp.lineTo(b.p2());
+		p->drawPath(pp);
+
 		jter.next();
-		p->drawArc(bb,i * len,len - 50);
+		++i;
+	}
+
+	// draw calls
+	QMapIterator<Procedure*,Procedure*> kter(calls);
+	while(kter.hasNext())
+	{
+		kter.next();
+		auto ix = std::find(procs.begin(),procs.end(),kter.key());
+		auto iy = std::find(procs.begin(),procs.end(),kter.value());
+
+		ensure(ix != procs.end());
+		ensure(iy != procs.end());
+
+		size_t x = std::distance(procs.begin(),ix);
+		size_t y = std::distance(procs.begin(),iy);
+
+		QLineF a = QLineF::fromPolar(bb2.width() / 2 ,x * len + (len - 2) / 2).translated(bb1.center());
+		QLineF b = QLineF::fromPolar(bb2.width() / 2 ,y * len + (len - 2) / 2).translated(bb1.center());
+
+		p->drawLine(a.p2(),b.p2());
+
 		++i;
 	}
 
