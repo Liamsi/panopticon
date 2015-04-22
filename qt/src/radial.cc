@@ -34,9 +34,11 @@ Radial::~Radial(void) {}
 
 void Radial::paint(QPainter* p)
 {
-	QSet<Procedure*> procs;
-	QMap<Procedure*,Procedure*> calls;
+	QList<QVariant> procs;
+	QList<QPair<QVariant,QVariant>> calls;
 	QListIterator<QVariant> iter(_calls);
+	QList<QPair<QVariant,QStaticText>> labels;
+	qreal max_label = 0;
 
 	while(iter.hasNext())
 	{
@@ -48,19 +50,30 @@ void Radial::paint(QPainter* p)
 		}
 		else
 		{
-			Procedure* p1 = qobject_cast<Procedure*>(vl.takeFirst().value<QObject*>());
-			Procedure* p2 = qobject_cast<Procedure*>(vl.takeFirst().value<QObject*>());
+			QVariant p1 = vl.takeFirst();
+			QVariant p2 = vl.takeFirst();
 
-			if(!p1 || !p2)
+			if(!procs.contains(p1))
 			{
-				qWarning() << "invalid call:" << iter.peekPrevious();
+				Procedure* proc = qobject_cast<Procedure*>(p1.value<QObject*>());
+				QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p1.toString());
+
+				labels.append(QPair<QVariant,QStaticText>(p1,label));
+				procs.append(p1);
+				max_label = std::max(max_label,label.size().width());
 			}
-			else
+
+			if(!procs.contains(p2))
 			{
-				procs.insert(p1);
-				procs.insert(p2);
-				calls.insertMulti(p1,p2);
+				Procedure* proc = qobject_cast<Procedure*>(p2.value<QObject*>());
+				QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p2.toString());
+
+				labels.append(QPair<QVariant,QStaticText>(p2,label));
+				procs.append(p2);
+				max_label = std::max(max_label,label.size().width());
 			}
+
+			calls.append(QPair<QVariant,QVariant>(p1,p2));
 		}
 	}
 	iter.toFront();
@@ -69,14 +82,18 @@ void Radial::paint(QPainter* p)
 	p->save();
 	p->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing,true);
 
-	QPen pen(QBrush(QColor("blue")),3);
+	QPen pen(QBrush(QColor("blue")),1);
 	pen.setCosmetic(true);
 	p->setPen(pen);
 
 	size_t i = 0;
 	const size_t len = 360 / procs.size();
-	QSetIterator<Procedure*> jter(procs);
-	QRectF bb1 = boundingRect().adjusted(0,0,-2 * pen.width(),-2 * pen.width());
+	QListIterator<QVariant> jter(procs);
+	const qreal padding = 2 * pen.width() + 10 + 2 * max_label;
+	QRectF bb1 = boundingRect();
+
+	if(padding + 100 <= std::min(bb1.width(),bb1.height()))
+		bb1.adjust(0,0,-padding,-padding);
 
 	bb1.setWidth(std::min(bb1.height(),bb1.width()));
 	bb1.setHeight(std::min(bb1.height(),bb1.width()));
@@ -88,9 +105,12 @@ void Radial::paint(QPainter* p)
 	// draw sectors
 	while(jter.hasNext())
 	{
+		QVariant v = jter.next();
 		QPainterPath pp;
 		QLineF a = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
 		QLineF b = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
+		QLineF m = QLineF::fromPolar(bb1.width() / 2 + 5,i * len + (len - 2) / 2).translated(bb1.center());
+		QStaticText label = std::find_if(labels.begin(),labels.end(),[&](QPair<QVariant,QStaticText> const& qq) { return qq.first == v; })->second;
 
 		pp.arcMoveTo(bb1,i * len);
 		pp.arcTo(bb1,i * len,len - 2);
@@ -101,17 +121,38 @@ void Radial::paint(QPainter* p)
 		pp.lineTo(b.p2());
 		p->drawPath(pp);
 
-		jter.next();
+		p->save();
+		QPen pen(QBrush(QColor("red")),2);
+		pen.setCosmetic(true);
+		p->setPen(pen);
+
+		p->translate(m.p2());
+		qreal r = (360 - i * len - ((len - 2) / 2));
+		p->rotate(r);
+
+		if(r > 90 && r < 270)
+		{
+			p->translate(QPointF(label.size().width(),label.size().height() / 2));
+			p->rotate(180);
+		}
+		else
+		{
+			p->translate(QPointF(0,-label.size().height() / 2));
+		}
+
+		p->drawStaticText(QPointF(0,0),label);
+		p->restore();
+
 		++i;
 	}
 
 	// draw calls
-	QMapIterator<Procedure*,Procedure*> kter(calls);
+	QListIterator<QPair<QVariant,QVariant>> kter(calls);
 	while(kter.hasNext())
 	{
-		kter.next();
-		auto ix = std::find(procs.begin(),procs.end(),kter.key());
-		auto iy = std::find(procs.begin(),procs.end(),kter.value());
+		QPair<QVariant,QVariant> q = kter.next();
+		auto ix = std::find(procs.begin(),procs.end(),q.first);
+		auto iy = std::find(procs.begin(),procs.end(),q.second);
 
 		ensure(ix != procs.end());
 		ensure(iy != procs.end());
