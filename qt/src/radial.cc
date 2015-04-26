@@ -92,7 +92,7 @@ void Radial::paint(QPainter* p)
 	if(procs.size() > 0)
 	{
 		size_t i = 0;
-		const size_t len = 360 / procs.size();
+		const qreal len = 360 / procs.size();
 		QListIterator<QVariant> jter(procs);
 		const qreal padding = 2 * pen.width() + 10 + 2 * max_label;
 		QRectF bb1 = boundingRect();
@@ -112,18 +112,18 @@ void Radial::paint(QPainter* p)
 		{
 			QVariant v = jter.next();
 			QPainterPath pp;
-			QLineF a = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
-			QLineF b = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
+			QLineF a = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
+			QLineF b = QLineF::fromPolar(bb2.width() / 2,i * len + 180 - 2).translated(bb1.center());
+
 			QLineF m = QLineF::fromPolar(bb1.width() / 2 + 5,i * len + (len - 2) / 2).translated(bb1.center());
 			QStaticText label = std::find_if(labels.begin(),labels.end(),[&](QPair<QVariant,QStaticText> const& qq) { return qq.first == v; })->second;
 
 			pp.arcMoveTo(bb1,i * len);
 			pp.arcTo(bb1,i * len,len - 2);
-			pp.lineTo(a.p2());
-			pp.arcMoveTo(bb2,i * len);
-			pp.arcTo(bb2,i * len,len - 2);
-			pp.arcMoveTo(bb2,i * len);
 			pp.lineTo(b.p2());
+			pp.arcTo(bb2,i * len + len - 2, -len + 2);
+			pp.lineTo(a.p2());
+			p->fillPath(pp,QBrush(QColor("red")));
 			p->drawPath(pp);
 
 			p->save();
