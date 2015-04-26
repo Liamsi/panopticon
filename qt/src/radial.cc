@@ -28,7 +28,10 @@
 
 #include <panopticon/ensure.hh>
 
-Radial::Radial(QQuickItem* p) : QQuickPaintedItem(p) {}
+Radial::Radial(QQuickItem* p) : QQuickPaintedItem(p)
+{
+	connect(this,SIGNAL(callsChanged()),this,SLOT(update()));
+}
 
 Radial::~Radial(void) {}
 
@@ -86,86 +89,89 @@ void Radial::paint(QPainter* p)
 	pen.setCosmetic(true);
 	p->setPen(pen);
 
-	size_t i = 0;
-	const size_t len = 360 / procs.size();
-	QListIterator<QVariant> jter(procs);
-	const qreal padding = 2 * pen.width() + 10 + 2 * max_label;
-	QRectF bb1 = boundingRect();
-
-	if(padding + 100 <= std::min(bb1.width(),bb1.height()))
-		bb1.adjust(0,0,-padding,-padding);
-
-	bb1.setWidth(std::min(bb1.height(),bb1.width()));
-	bb1.setHeight(std::min(bb1.height(),bb1.width()));
-	bb1.moveCenter(boundingRect().center());
-
-	QRectF bb2 = bb1.adjusted(0,0,-100,-100);
-	bb2.moveCenter(boundingRect().center());
-
-	// draw sectors
-	while(jter.hasNext())
+	if(procs.size() > 0)
 	{
-		QVariant v = jter.next();
-		QPainterPath pp;
-		QLineF a = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
-		QLineF b = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
-		QLineF m = QLineF::fromPolar(bb1.width() / 2 + 5,i * len + (len - 2) / 2).translated(bb1.center());
-		QStaticText label = std::find_if(labels.begin(),labels.end(),[&](QPair<QVariant,QStaticText> const& qq) { return qq.first == v; })->second;
+		size_t i = 0;
+		const size_t len = 360 / procs.size();
+		QListIterator<QVariant> jter(procs);
+		const qreal padding = 2 * pen.width() + 10 + 2 * max_label;
+		QRectF bb1 = boundingRect();
 
-		pp.arcMoveTo(bb1,i * len);
-		pp.arcTo(bb1,i * len,len - 2);
-		pp.lineTo(a.p2());
-		pp.arcMoveTo(bb2,i * len);
-		pp.arcTo(bb2,i * len,len - 2);
-		pp.arcMoveTo(bb2,i * len);
-		pp.lineTo(b.p2());
-		p->drawPath(pp);
+		if(padding + 100 <= std::min(bb1.width(),bb1.height()))
+			bb1.adjust(0,0,-padding,-padding);
 
-		p->save();
-		QPen pen(QBrush(QColor("red")),2);
-		pen.setCosmetic(true);
-		p->setPen(pen);
+		bb1.setWidth(std::min(bb1.height(),bb1.width()));
+		bb1.setHeight(std::min(bb1.height(),bb1.width()));
+		bb1.moveCenter(boundingRect().center());
 
-		p->translate(m.p2());
-		qreal r = (360 - i * len - ((len - 2) / 2));
-		p->rotate(r);
+		QRectF bb2 = bb1.adjusted(0,0,-100,-100);
+		bb2.moveCenter(boundingRect().center());
 
-		if(r > 90 && r < 270)
+		// draw sectors
+		while(jter.hasNext())
 		{
-			p->translate(QPointF(label.size().width(),label.size().height() / 2));
-			p->rotate(180);
+			QVariant v = jter.next();
+			QPainterPath pp;
+			QLineF a = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
+			QLineF b = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
+			QLineF m = QLineF::fromPolar(bb1.width() / 2 + 5,i * len + (len - 2) / 2).translated(bb1.center());
+			QStaticText label = std::find_if(labels.begin(),labels.end(),[&](QPair<QVariant,QStaticText> const& qq) { return qq.first == v; })->second;
+
+			pp.arcMoveTo(bb1,i * len);
+			pp.arcTo(bb1,i * len,len - 2);
+			pp.lineTo(a.p2());
+			pp.arcMoveTo(bb2,i * len);
+			pp.arcTo(bb2,i * len,len - 2);
+			pp.arcMoveTo(bb2,i * len);
+			pp.lineTo(b.p2());
+			p->drawPath(pp);
+
+			p->save();
+			QPen pen(QBrush(QColor("red")),2);
+			pen.setCosmetic(true);
+			p->setPen(pen);
+
+			p->translate(m.p2());
+			qreal r = (360 - i * len - ((len - 2) / 2));
+			p->rotate(r);
+
+			if(r > 90 && r < 270)
+			{
+				p->translate(QPointF(label.size().width(),label.size().height() / 2));
+				p->rotate(180);
+			}
+			else
+			{
+				p->translate(QPointF(0,-label.size().height() / 2));
+			}
+
+			p->drawStaticText(QPointF(0,0),label);
+			p->restore();
+
+			++i;
 		}
-		else
+
+		// draw calls
+		QListIterator<QPair<QVariant,QVariant>> kter(calls);
+		while(kter.hasNext())
 		{
-			p->translate(QPointF(0,-label.size().height() / 2));
+			QPair<QVariant,QVariant> q = kter.next();
+			auto ix = std::find(procs.begin(),procs.end(),q.first);
+			auto iy = std::find(procs.begin(),procs.end(),q.second);
+
+			ensure(ix != procs.end());
+			ensure(iy != procs.end());
+
+			size_t x = std::distance(procs.begin(),ix);
+			size_t y = std::distance(procs.begin(),iy);
+
+			QLineF a = QLineF::fromPolar(bb2.width() / 2 ,x * len + (len - 2) / 2).translated(bb1.center());
+			QLineF b = QLineF::fromPolar(bb2.width() / 2 ,y * len + (len - 2) / 2).translated(bb1.center());
+
+			p->drawLine(a.p2(),b.p2());
+
+			++i;
 		}
-
-		p->drawStaticText(QPointF(0,0),label);
-		p->restore();
-
-		++i;
-	}
-
-	// draw calls
-	QListIterator<QPair<QVariant,QVariant>> kter(calls);
-	while(kter.hasNext())
-	{
-		QPair<QVariant,QVariant> q = kter.next();
-		auto ix = std::find(procs.begin(),procs.end(),q.first);
-		auto iy = std::find(procs.begin(),procs.end(),q.second);
-
-		ensure(ix != procs.end());
-		ensure(iy != procs.end());
-
-		size_t x = std::distance(procs.begin(),ix);
-		size_t y = std::distance(procs.begin(),iy);
-
-		QLineF a = QLineF::fromPolar(bb2.width() / 2 ,x * len + (len - 2) / 2).translated(bb1.center());
-		QLineF b = QLineF::fromPolar(bb2.width() / 2 ,y * len + (len - 2) / 2).translated(bb1.center());
-
-		p->drawLine(a.p2(),b.p2());
-
-		++i;
 	}
 
 	p->restore();

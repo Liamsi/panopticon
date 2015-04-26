@@ -32,7 +32,7 @@ public:
 	virtual void paint(QPainter*) override;
 
 	QVariantList const& calls(void) const { return _calls; }
-	void setCalls(QVariantList const& c) { _calls = c; emit callsChanged(); update(); }
+	void setCalls(QVariantList const& c) { _calls = c; emit callsChanged(); }
 
 signals:
 	void callsChanged(void);
