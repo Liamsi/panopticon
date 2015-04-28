@@ -56,27 +56,30 @@ void Radial::paint(QPainter* p)
 			QVariant p1 = vl.takeFirst();
 			QVariant p2 = vl.takeFirst();
 
-			if(!procs.contains(p1))
+			if(p1 != p2)
 			{
-				Procedure* proc = qobject_cast<Procedure*>(p1.value<QObject*>());
-				QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p1.toString());
+				if(!procs.contains(p1))
+				{
+					Procedure* proc = qobject_cast<Procedure*>(p1.value<QObject*>());
+					QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p1.toString());
 
-				labels.append(QPair<QVariant,QStaticText>(p1,label));
-				procs.append(p1);
-				max_label = std::max(max_label,label.size().width());
+					labels.append(QPair<QVariant,QStaticText>(p1,label));
+					procs.append(p1);
+					max_label = std::max(max_label,label.size().width());
+				}
+
+				if(!procs.contains(p2))
+				{
+					Procedure* proc = qobject_cast<Procedure*>(p2.value<QObject*>());
+					QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p2.toString());
+
+					labels.append(QPair<QVariant,QStaticText>(p2,label));
+					procs.append(p2);
+					max_label = std::max(max_label,label.size().width());
+				}
+
+				calls.append(QPair<QVariant,QVariant>(p1,p2));
 			}
-
-			if(!procs.contains(p2))
-			{
-				Procedure* proc = qobject_cast<Procedure*>(p2.value<QObject*>());
-				QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p2.toString());
-
-				labels.append(QPair<QVariant,QStaticText>(p2,label));
-				procs.append(p2);
-				max_label = std::max(max_label,label.size().width());
-			}
-
-			calls.append(QPair<QVariant,QVariant>(p1,p2));
 		}
 	}
 	iter.toFront();
@@ -113,7 +116,7 @@ void Radial::paint(QPainter* p)
 			QVariant v = jter.next();
 			QPainterPath pp;
 			QLineF a = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
-			QLineF b = QLineF::fromPolar(bb2.width() / 2,i * len + 180 - 2).translated(bb1.center());
+			QLineF b = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
 
 			QLineF m = QLineF::fromPolar(bb1.width() / 2 + 5,i * len + (len - 2) / 2).translated(bb1.center());
 			QStaticText label = std::find_if(labels.begin(),labels.end(),[&](QPair<QVariant,QStaticText> const& qq) { return qq.first == v; })->second;
@@ -151,6 +154,8 @@ void Radial::paint(QPainter* p)
 			++i;
 		}
 
+		i = 0;
+
 		// draw calls
 		QListIterator<QPair<QVariant,QVariant>> kter(calls);
 		while(kter.hasNext())
@@ -158,17 +163,50 @@ void Radial::paint(QPainter* p)
 			QPair<QVariant,QVariant> q = kter.next();
 			auto ix = std::find(procs.begin(),procs.end(),q.first);
 			auto iy = std::find(procs.begin(),procs.end(),q.second);
+			qreal x_slots = 0, y_slots = 0;
+			boost::optional<std::pair<qreal,qreal>> pos = boost::none;
 
+			for(auto r: calls)
+			{
+				x_slots += ((r.first == q.first) ^ (r.second == q.first));
+				y_slots += ((r.first == q.second) ^ (r.second == q.second));
+
+				if(r == q)
+					pos = std::make_pair(x_slots,y_slots);
+			}
+
+			ensure(pos);
 			ensure(ix != procs.end());
 			ensure(iy != procs.end());
+			ensure(x_slots && y_slots);
 
-			size_t x = std::distance(procs.begin(),ix);
-			size_t y = std::distance(procs.begin(),iy);
+			qreal x_angle_start = std::distance(procs.begin(),ix) * len + ((pos->first - 1) / x_slots * (len - 2));
+			qreal y_angle_end = std::distance(procs.begin(),iy) * len + ((pos->second - 1) / y_slots * (len - 2));
+			qreal x_angle_end = x_angle_start + (len - 2) / x_slots;
+			qreal y_angle_start = y_angle_end + (len - 2) / y_slots;
 
-			QLineF a = QLineF::fromPolar(bb2.width() / 2 ,x * len + (len - 2) / 2).translated(bb1.center());
-			QLineF b = QLineF::fromPolar(bb2.width() / 2 ,y * len + (len - 2) / 2).translated(bb1.center());
+			QLineF a = QLineF::fromPolar(bb2.width() / 2, x_angle_start).translated(bb1.center());
+			QLineF ac = QLineF::fromPolar(bb2.width() / 2 - 100, x_angle_start).translated(bb1.center());
 
-			p->drawLine(a.p2(),b.p2());
+			QLineF b = QLineF::fromPolar(bb2.width() / 2, y_angle_start).translated(bb1.center());
+			QLineF bc = QLineF::fromPolar(bb2.width() / 2 - 100, y_angle_start).translated(bb1.center());
+
+			QLineF cc = QLineF::fromPolar(bb2.width() / 2 - 100, y_angle_end).translated(bb1.center());
+
+			QLineF d = QLineF::fromPolar(bb2.width() / 2, x_angle_end).translated(bb1.center());
+			QLineF dc = QLineF::fromPolar(bb2.width() / 2 - 100, x_angle_end).translated(bb1.center());
+
+			QPainterPath pp;
+			QColor fill = QColor::fromHsv((i * 54) % 256,150,100,100);
+
+			pp.moveTo(a.p2());
+			pp.cubicTo(ac.p2(),bc.p2(),b.p2());
+			pp.arcTo(bb2,y_angle_start,y_angle_end - y_angle_start);
+			pp.cubicTo(cc.p2(),dc.p2(),d.p2());
+			pp.arcTo(bb2,x_angle_end,-(x_angle_end - x_angle_start));
+
+			p->fillPath(pp,QBrush(fill));
+			p->drawPath(pp);
 
 			++i;
 		}
