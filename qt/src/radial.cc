@@ -43,6 +43,7 @@ void Radial::paint(QPainter* p)
 	QList<QPair<QVariant,QStaticText>> labels;
 	qreal max_label = 0;
 
+	// collect all edges and vertices
 	while(iter.hasNext())
 	{
 		QVariantList vl = iter.next().value<QVariantList>();
@@ -82,6 +83,8 @@ void Radial::paint(QPainter* p)
 			}
 		}
 	}
+
+	calls = minimizeCrossing(calls);
 	iter.toFront();
 
 	ensure(p);
@@ -213,4 +216,53 @@ void Radial::paint(QPainter* p)
 	}
 
 	p->restore();
+}
+
+/*
+ * Adapted from Baur & Brandes: "Crossing Reduction in Circular Layouts"
+ */
+QList<QPair<QVariant,QVariant>> Radial::minimizeCrossing(QList<QPair<QVariant,QVariant>> unsorted)
+{
+	using edge_t = QPair<QVariant,QVariant>;
+	using node_t = QVariant;
+	QList<node_t> nodes, todo, order;
+
+	if(unsorted.empty())
+		return unsorted;
+
+	for(edge_t const& e: unsorted)
+	{
+		if(!nodes.contains(e.first))
+			nodes.append(e.first);
+		if(!nodes.contains(e.second))
+			nodes.append(e.second);
+	}
+
+	todo = nodes;
+	order.append(todo.takeFirst());
+	std::function<unsigned int(node_t const& n)> unplaced_neight = [&](node_t const& n)
+	{
+		return std::count_if(unsorted.begin(),unsorted.end(),[&](edge_t const& e)
+		{
+			return ((e.first == n && !order.contains(e.second)) ||
+							(e.second == n && !order.contains(e.first))) && e.first != e.second;
+		});
+	};
+
+	while(!todo.empty())
+	{
+		std::sort(todo.begin(),todo.end(),[&](node_t const& a, node_t const& b)
+			{ return unplaced_neight(a) < unplaced_neight(b); });
+		order.append(todo.takeFirst());
+	}
+
+	std::sort(unsorted.begin(),unsorted.end(),[&](edge_t const& a, edge_t const& b)
+	{
+		return order.indexOf(a.first) < order.indexOf(b.first) ||
+					 order.indexOf(a.first) < order.indexOf(b.second) ||
+					 order.indexOf(a.second) < order.indexOf(b.first) ||
+					 order.indexOf(a.second) < order.indexOf(b.second);
+	});
+
+	return unsorted;
 }
