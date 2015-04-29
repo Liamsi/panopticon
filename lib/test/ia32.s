@@ -1,4 +1,6 @@
 .intel_syntax noprefix
+.global _start
+_start:
 aaa
 aad
 aad 0x33

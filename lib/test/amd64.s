@@ -1,5 +1,7 @@
 .text
 .intel_syntax noprefix
+.global _start
+_start:
 adc al, 6
 adc ax, 44
 adc eax, 544
