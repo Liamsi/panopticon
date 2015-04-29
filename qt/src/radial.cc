@@ -79,7 +79,10 @@ void Radial::paint(QPainter* p)
 					max_label = std::max(max_label,label.size().width());
 				}
 
-				calls.append(QPair<QVariant,QVariant>(p1,p2));
+				QPair<QVariant,QVariant> edge(p1,p2), revedge(p2,p1);
+
+				if(!calls.contains(edge) && !calls.contains(revedge))
+					calls.append(edge);
 			}
 		}
 	}
@@ -240,7 +243,7 @@ QList<QPair<QVariant,QVariant>> Radial::minimizeCrossing(QList<QPair<QVariant,QV
 
 	todo = nodes;
 	order.append(todo.takeFirst());
-	std::function<unsigned int(node_t const& n)> unplaced_neight = [&](node_t const& n)
+	std::function<unsigned int(node_t const&)> unplaced_neight = [&](node_t const& n)
 	{
 		return std::count_if(unsorted.begin(),unsorted.end(),[&](edge_t const& e)
 		{
@@ -248,20 +251,70 @@ QList<QPair<QVariant,QVariant>> Radial::minimizeCrossing(QList<QPair<QVariant,QV
 							(e.second == n && !order.contains(e.first))) && e.first != e.second;
 		});
 	};
+	std::function<unsigned int(edge_t const&,QList<node_t> const&)> crossings = [&](edge_t const& e, QList<node_t> const& order)
+	{
+		return std::count_if(unsorted.begin(),unsorted.end(),[&](edge_t const& f)
+		{
+			return order.contains(f.first) && order.contains(f.second) && (
+						 (order.indexOf(e.first) < order.indexOf(f.first) && order.indexOf(f.first) < order.indexOf(e.second)) ||
+						 (order.indexOf(f.first) < order.indexOf(e.first) && order.indexOf(e.first) < order.indexOf(f.second)) ||
+						 (order.indexOf(f.second) < order.indexOf(e.second) && order.indexOf(e.second) < order.indexOf(f.first)) ||
+						 (order.indexOf(e.second) < order.indexOf(f.second) && order.indexOf(f.second) < order.indexOf(e.first)));
+		});
+	};
 
 	while(!todo.empty())
 	{
 		std::sort(todo.begin(),todo.end(),[&](node_t const& a, node_t const& b)
 			{ return unplaced_neight(a) < unplaced_neight(b); });
-		order.append(todo.takeFirst());
+
+		auto tmp_front = order, tmp_back = order;
+		auto node = todo.takeFirst();
+
+		tmp_back.append(node);
+		tmp_front.prepend(node);
+
+		unsigned int back_cross = 0, front_cross = 0;
+
+		for(edge_t const& e: unsorted)
+		{
+			if(e.first == node || e.second == node)
+			{
+				back_cross += crossings(e,tmp_back);
+				front_cross += crossings(e,tmp_front);
+			}
+		}
+
+		if(front_cross < back_cross)
+			order = tmp_front;
+		else
+			order = tmp_back;
 	}
 
-	std::sort(unsorted.begin(),unsorted.end(),[&](edge_t const& a, edge_t const& b)
+	std::sort(unsorted.begin(),unsorted.end(),[&](edge_t const& b, edge_t const& a)
 	{
-		return order.indexOf(a.first) < order.indexOf(b.first) ||
-					 order.indexOf(a.first) < order.indexOf(b.second) ||
-					 order.indexOf(a.second) < order.indexOf(b.first) ||
-					 order.indexOf(a.second) < order.indexOf(b.second);
+		boost::optional<std::tuple<node_t,node_t,node_t>> t;
+
+		if(a.first == b.first)
+			t = boost::make_optional(std::make_tuple(a.first,a.second,b.second));
+		else if(a.first == b.second)
+			t = boost::make_optional(std::make_tuple(a.first,a.second,b.first));
+		else if(a.second == b.first)
+			t = boost::make_optional(std::make_tuple(b.first,a.first,b.second));
+		else if(a.second == b.second)
+			t = boost::make_optional(std::make_tuple(a.second,a.first,b.first));
+
+		if(t)
+		{
+			return order.indexOf(std::get<1>(*t)) < order.indexOf(std::get<2>(*t));
+		}
+		else
+		{
+			return (order.indexOf(a.first) < order.indexOf(b.first) &&
+						 order.indexOf(a.first) < order.indexOf(b.second)) ||
+						 (order.indexOf(a.second) < order.indexOf(b.first) &&
+						 order.indexOf(a.second) < order.indexOf(b.second));
+		}
 	});
 
 	return unsorted;
