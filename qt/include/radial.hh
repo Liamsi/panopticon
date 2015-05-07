@@ -39,6 +39,4 @@ signals:
 
 private:
 	QVariantList _calls;
-
-	static QList<QPair<QVariant,QVariant>> minimizeCrossing(QList<QPair<QVariant,QVariant>> inital);
 };

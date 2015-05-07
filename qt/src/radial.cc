@@ -25,8 +25,12 @@
 
 #include "radial.hh"
 #include "session.hh"
+#include "circle.hh"
 
 #include <panopticon/ensure.hh>
+
+using namespace po;
+using namespace boost;
 
 Radial::Radial(QQuickItem* p) : QQuickPaintedItem(p)
 {
@@ -37,20 +41,29 @@ Radial::~Radial(void) {}
 
 void Radial::paint(QPainter* p)
 {
-	QList<QVariant> procs;
-	QList<QPair<QVariant,QVariant>> calls;
-	QListIterator<QVariant> iter(_calls);
-	QList<QPair<QVariant,QStaticText>> labels;
-	qreal max_label = 0;
+	using vertex_t = std::tuple<QVariant,QStaticText>;
 
-	// collect all edges and vertices
-	while(iter.hasNext())
+	qreal max_label = 0;
+	po::digraph<vertex_t,int> calls;
+
+	auto insert_vx = [&](QVariant v)
 	{
-		QVariantList vl = iter.next().value<QVariantList>();
+		Procedure* proc = qobject_cast<Procedure*>(v.value<QObject*>());
+		QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : v.toString());
+
+		max_label = std::max(max_label,label.size().width());
+		return insert_vertex(std::make_tuple(v,label),calls);
+	};
+
+	// convert to digraph
+	// XXX: cache
+	for(auto v: _calls)
+	{
+		QVariantList vl = v.value<QVariantList>();
 
 		if(vl.size() < 2)
 		{
-			qWarning() << "invalid call:" << iter.peekPrevious();
+			qWarning() << "invalid call:" << v;
 		}
 		else
 		{
@@ -59,36 +72,34 @@ void Radial::paint(QPainter* p)
 
 			if(p1 != p2)
 			{
-				if(!procs.contains(p1))
-				{
-					Procedure* proc = qobject_cast<Procedure*>(p1.value<QObject*>());
-					QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p1.toString());
+				boost::optional<po::digraph<vertex_t,int>::vertex_descriptor> from, to;
 
-					labels.append(QPair<QVariant,QStaticText>(p1,label));
-					procs.append(p1);
-					max_label = std::max(max_label,label.size().width());
+				for(auto vx: iters(vertices(calls)))
+				{
+					if(std::get<0>(get_vertex(vx,calls)) == p1)
+						from = vx;
+					if(std::get<0>(get_vertex(vx,calls)) == p2)
+						to = vx;
 				}
 
-				if(!procs.contains(p2))
+				if(!from)
+					from = insert_vx(p1);
+				if(!to)
 				{
-					Procedure* proc = qobject_cast<Procedure*>(p2.value<QObject*>());
-					QStaticText label(proc && proc->procedure() ? QString::fromStdString((*proc->procedure())->name) : p2.toString());
-
-					labels.append(QPair<QVariant,QStaticText>(p2,label));
-					procs.append(p2);
-					max_label = std::max(max_label,label.size().width());
+					if(to == from)
+						to = from;
+					else
+						to = insert_vx(p2);
 				}
 
-				QPair<QVariant,QVariant> edge(p1,p2), revedge(p2,p1);
+				ensure(from && to);
 
-				if(!calls.contains(edge) && !calls.contains(revedge))
-					calls.append(edge);
+				insert_edge(0,*from,*to,calls);
 			}
 		}
 	}
 
-	calls = minimizeCrossing(calls);
-	iter.toFront();
+	auto vert_lst = minimizeCrossing(calls);
 
 	ensure(p);
 	p->save();
@@ -98,11 +109,10 @@ void Radial::paint(QPainter* p)
 	pen.setCosmetic(true);
 	p->setPen(pen);
 
-	if(procs.size() > 0)
+	if(!vert_lst.empty())
 	{
 		size_t i = 0;
-		const qreal len = 360 / procs.size();
-		QListIterator<QVariant> jter(procs);
+		const qreal len = 360 / vert_lst.size();
 		const qreal padding = 2 * pen.width() + 10 + 2 * max_label;
 		QRectF bb1 = boundingRect();
 
@@ -117,15 +127,16 @@ void Radial::paint(QPainter* p)
 		bb2.moveCenter(boundingRect().center());
 
 		// draw sectors
-		while(jter.hasNext())
+		for(auto _vx: vert_lst)
 		{
-			QVariant v = jter.next();
+			QVariant v;
+			QStaticText label;
 			QPainterPath pp;
 			QLineF a = QLineF::fromPolar(bb1.width() / 2,i * len).translated(bb1.center());
 			QLineF b = QLineF::fromPolar(bb2.width() / 2,i * len + len - 2).translated(bb1.center());
-
 			QLineF m = QLineF::fromPolar(bb1.width() / 2 + 5,i * len + (len - 2) / 2).translated(bb1.center());
-			QStaticText label = std::find_if(labels.begin(),labels.end(),[&](QPair<QVariant,QStaticText> const& qq) { return qq.first == v; })->second;
+
+			std::tie(v,label) = get_vertex(_vx,calls);
 
 			pp.arcMoveTo(bb1,i * len);
 			pp.arcTo(bb1,i * len,len - 2);
@@ -163,31 +174,27 @@ void Radial::paint(QPainter* p)
 		i = 0;
 
 		// draw calls
-		QListIterator<QPair<QVariant,QVariant>> kter(calls);
-		while(kter.hasNext())
+		for(auto _ed: iters(edges(calls)))
 		{
-			QPair<QVariant,QVariant> q = kter.next();
-			auto ix = std::find(procs.begin(),procs.end(),q.first);
-			auto iy = std::find(procs.begin(),procs.end(),q.second);
+			auto ix = source(_ed,calls);
+			auto iy = target(_ed,calls);
 			qreal x_slots = 0, y_slots = 0;
 			boost::optional<std::pair<qreal,qreal>> pos = boost::none;
 
-			for(auto r: calls)
+			for(auto r: iters(edges(calls)))
 			{
-				x_slots += ((r.first == q.first) ^ (r.second == q.first));
-				y_slots += ((r.first == q.second) ^ (r.second == q.second));
+				x_slots += ((source(r,calls) == ix) ^ (target(r,calls) == ix));
+				y_slots += ((source(r,calls) == iy) ^ (target(r,calls) == iy));
 
-				if(r == q)
+				if(get_edge(r,calls) == get_edge(_ed,calls))
 					pos = std::make_pair(x_slots,y_slots);
 			}
 
 			ensure(pos);
-			ensure(ix != procs.end());
-			ensure(iy != procs.end());
 			ensure(x_slots && y_slots);
 
-			qreal x_angle_start = std::distance(procs.begin(),ix) * len + ((pos->first - 1) / x_slots * (len - 2));
-			qreal y_angle_end = std::distance(procs.begin(),iy) * len + ((pos->second - 1) / y_slots * (len - 2));
+			qreal x_angle_start = std::distance(vert_lst.begin(),std::find(vert_lst.begin(),vert_lst.end(),ix)) * len + ((pos->first - 1) / x_slots * (len - 2));
+			qreal y_angle_end = std::distance(vert_lst.begin(),std::find(vert_lst.begin(),vert_lst.end(),iy)) * len + ((pos->second - 1) / y_slots * (len - 2));
 			qreal x_angle_end = x_angle_start + (len - 2) / x_slots;
 			qreal y_angle_start = y_angle_end + (len - 2) / y_slots;
 
@@ -219,103 +226,4 @@ void Radial::paint(QPainter* p)
 	}
 
 	p->restore();
-}
-
-/*
- * Adapted from Baur & Brandes: "Crossing Reduction in Circular Layouts"
- */
-QList<QPair<QVariant,QVariant>> Radial::minimizeCrossing(QList<QPair<QVariant,QVariant>> unsorted)
-{
-	using edge_t = QPair<QVariant,QVariant>;
-	using node_t = QVariant;
-	QList<node_t> nodes, todo, order;
-
-	if(unsorted.empty())
-		return unsorted;
-
-	for(edge_t const& e: unsorted)
-	{
-		if(!nodes.contains(e.first))
-			nodes.append(e.first);
-		if(!nodes.contains(e.second))
-			nodes.append(e.second);
-	}
-
-	todo = nodes;
-	order.append(todo.takeFirst());
-	std::function<unsigned int(node_t const&)> unplaced_neight = [&](node_t const& n)
-	{
-		return std::count_if(unsorted.begin(),unsorted.end(),[&](edge_t const& e)
-		{
-			return ((e.first == n && !order.contains(e.second)) ||
-							(e.second == n && !order.contains(e.first))) && e.first != e.second;
-		});
-	};
-	std::function<unsigned int(edge_t const&,QList<node_t> const&)> crossings = [&](edge_t const& e, QList<node_t> const& order)
-	{
-		return std::count_if(unsorted.begin(),unsorted.end(),[&](edge_t const& f)
-		{
-			return order.contains(f.first) && order.contains(f.second) && (
-						 (order.indexOf(e.first) < order.indexOf(f.first) && order.indexOf(f.first) < order.indexOf(e.second)) ||
-						 (order.indexOf(f.first) < order.indexOf(e.first) && order.indexOf(e.first) < order.indexOf(f.second)) ||
-						 (order.indexOf(f.second) < order.indexOf(e.second) && order.indexOf(e.second) < order.indexOf(f.first)) ||
-						 (order.indexOf(e.second) < order.indexOf(f.second) && order.indexOf(f.second) < order.indexOf(e.first)));
-		});
-	};
-
-	while(!todo.empty())
-	{
-		std::sort(todo.begin(),todo.end(),[&](node_t const& a, node_t const& b)
-			{ return unplaced_neight(a) < unplaced_neight(b); });
-
-		auto tmp_front = order, tmp_back = order;
-		auto node = todo.takeFirst();
-
-		tmp_back.append(node);
-		tmp_front.prepend(node);
-
-		unsigned int back_cross = 0, front_cross = 0;
-
-		for(edge_t const& e: unsorted)
-		{
-			if(e.first == node || e.second == node)
-			{
-				back_cross += crossings(e,tmp_back);
-				front_cross += crossings(e,tmp_front);
-			}
-		}
-
-		if(front_cross < back_cross)
-			order = tmp_front;
-		else
-			order = tmp_back;
-	}
-
-	std::sort(unsorted.begin(),unsorted.end(),[&](edge_t const& b, edge_t const& a)
-	{
-		boost::optional<std::tuple<node_t,node_t,node_t>> t;
-
-		if(a.first == b.first)
-			t = boost::make_optional(std::make_tuple(a.first,a.second,b.second));
-		else if(a.first == b.second)
-			t = boost::make_optional(std::make_tuple(a.first,a.second,b.first));
-		else if(a.second == b.first)
-			t = boost::make_optional(std::make_tuple(b.first,a.first,b.second));
-		else if(a.second == b.second)
-			t = boost::make_optional(std::make_tuple(a.second,a.first,b.first));
-
-		if(t)
-		{
-			return order.indexOf(std::get<1>(*t)) < order.indexOf(std::get<2>(*t));
-		}
-		else
-		{
-			return (order.indexOf(a.first) < order.indexOf(b.first) &&
-						 order.indexOf(a.first) < order.indexOf(b.second)) ||
-						 (order.indexOf(a.second) < order.indexOf(b.first) &&
-						 order.indexOf(a.second) < order.indexOf(b.second));
-		}
-	});
-
-	return unsorted;
 }
